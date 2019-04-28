@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="ja_JP">
+<context>
+    <name>EditPaneForm.ui</name>
+    <message>
+        <source>Select All</source>
+        <translation>全てを選択</translation>
+    </message>
+    <message>
+        <source>Cut</source>
+        <translation>カット</translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation>コピー</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>貼り付け</translation>
+    </message>
+</context>
+<context>
+    <name>ListPaneForm.ui</name>
+    <message>
+        <source>Active</source>
+        <translation>編集可</translation>
+    </message>
+    <message>
+        <source>Archive</source>
+        <translation>アーカイブ</translation>
+    </message>
+    <message>
+        <source>New</source>
+        <translation>新規</translation>
+    </message>
+    <message>
+        <source>Move</source>
+        <translation>移動</translation>
+    </message>
+</context>
+<context>
+    <name>main</name>
+    <message>
+        <source>qMemo</source>
+        <translation>qMemo</translation>
+    </message>
+</context>
+</TS>
