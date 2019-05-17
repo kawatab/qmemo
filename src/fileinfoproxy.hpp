@@ -1,4 +1,4 @@
-// qMemo/ListPane.qml - List view pane
+// qMemo/fileinfoproxy.hpp - proxy class for file info list
 // qMemo is a note taking application
 //
 //  Copyright (C) 2019  Yasuhiro Yamakawa <kawatab@yahoo.co.jp>
@@ -17,15 +17,25 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import QtQuick 2.11
+#pragma once
 
-ListPaneForm {
-    fileListView.onCountChanged: moveButton.enabled = fileListView.count > 0
+#include <QSortFilterProxyModel>
 
-    fileListView.delegate: ListItemForm {
-	MouseArea {
-	    anchors.fill: parent
-	    onClicked: fileListView.currentIndex = index
-	}
-    }
-}
+class FileInfoModel;
+
+
+class FileInfoProxy : public QSortFilterProxyModel
+{
+  Q_OBJECT
+
+public:
+  FileInfoProxy(QObject* parent = 0);
+
+  void setFileInfoModel(FileInfoModel* model);
+  FileInfoModel* fileInfoModel() const;
+
+protected:
+  bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
+  bool lessThan(const QModelIndex &left, const QModelIndex& right) const override;
+};
+

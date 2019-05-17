@@ -24,6 +24,7 @@
 #include <QObject>
 #include <QUrl>
 #include "fileinfomodel.hpp"
+#include "fileinfoproxy.hpp"
 
 class QByteArray;
 class QFile;
@@ -32,7 +33,7 @@ class QStringList;
 
 class DataHandler : public QObject {
   Q_OBJECT
-  Q_PROPERTY(QAbstractListModel* currentFileList READ currentFileList NOTIFY fileListSwitched)
+  Q_PROPERTY(QAbstractItemModel* currentFileList READ currentFileList NOTIFY fileListSwitched)
   Q_PROPERTY(bool isEditable READ isEditable WRITE setIsEditable NOTIFY isEditableChanged)
   Q_PROPERTY(bool isActiveMode READ isActiveMode WRITE setActiveMode)
 
@@ -46,14 +47,14 @@ public:
 
   bool isAvailable() const;
 
-  Q_INVOKABLE bool createNewFile();
-  Q_INVOKABLE int deleteEmptyFile();
+  Q_INVOKABLE int createNewFile(const QString& text);
+  Q_INVOKABLE int deleteEmptyFile(int index = -1);
   Q_INVOKABLE bool hasCurrentFile() const;
   Q_INVOKABLE QString loadCurrentFile() const;
+  Q_INVOKABLE bool matchCurrentFile(int index);
   Q_INVOKABLE void moveCurrentFile(int index);
   Q_INVOKABLE void releaseCurrentFile();
-  Q_INVOKABLE bool saveCurrentFile(const QString& text) const;
-  Q_INVOKABLE void saveFileBeforeClosing(const QString& text);
+  Q_INVOKABLE int saveCurrentFile(const QString& text, int index = -1) const;
   Q_INVOKABLE void selectFile(int index);
 
 signals:
@@ -63,18 +64,20 @@ signals:
 private:
   QUrl createFile() const;
   QUrl currentFile() const;
-  QAbstractListModel* currentFileList() const;
+  QAbstractItemModel* currentFileList();
   bool deleteFile(const QUrl& path) const;
   QString getLastModifiedDate(const QUrl& path) const;
   QString getPreviewOfContents(const QUrl& path) const;
   bool isActiveMode() const;
   bool isEditable() const;
   bool loadFile(QFile* file, QStringList* contents, int maxLength, QString(*func)(const QByteArray&)) const;
+  int mapFromSource(int sourceIndex) const;
+  int mapToSource(int proxyIndex) const;
   QUrl moveCurrentFile(const QUrl& url) const;
   bool saveFile(const QUrl& path, const QString& lines) const;
   void setActiveMode(bool b);
   void setCurrentFile(const QUrl& url);
-  void setCurrentFileList(QAbstractListModel* model);
+  void setCurrentFileList(QAbstractItemModel* model);
   QDir setDirectory(QDir path, const QString& name);
   void setFileList(const QDir& dir, FileInfoModel* list);
   void setIsEditable(bool b);
@@ -86,7 +89,7 @@ private:
   QDir mWorkDirectory;
   QDir mArchiveDirectory;
   QUrl mCurrentFile;
-  FileInfoModel* mCurrentFileList;
+  FileInfoProxy mCurrentFileList;
   FileInfoModel mActiveFileList;
   FileInfoModel mArchiveFileList;
   bool mIsEditable;

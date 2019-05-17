@@ -17,9 +17,9 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import QtQuick 2.7
-import QtQuick.Controls 2.0
-import QtQuick.Layouts 1.0
+import QtQuick 2.11
+import QtQuick.Controls 2.4
+import QtQuick.Layouts 1.11
 
 Item {
     property alias flick: flick
@@ -87,14 +87,12 @@ Item {
 
 	Flickable {
 	    id: flick
-	    // anchors.fill: parent
 	    Layout.alignment: Qt.AlignBottom
 	    Layout.fillWidth: true
 	    Layout.fillHeight: true
 	    Layout.margins: 4
-	    contentWidth: textEdit.paintedWidth
+	    // contentWidth: textEdit.paintedWidth
 	    contentHeight: textEdit.paintedHeight
-	    // interactive: false
 	    clip: true
 
 	    ScrollBar.vertical: ScrollBar {
@@ -103,12 +101,15 @@ Item {
 
 	    TextEdit {
 		id: textEdit
-		width: flick.width
+		Layout.fillWidth: true
+		Layout.fillHeight: true
+		// width: parent.width
+		// height: parent.height
 		selectByMouse: true
 		selectByKeyboard: true
 		font.pointSize: 10
 		textFormat: TextEdit.PlainText
-		wrapMode: TextEdit.WordWrap
+		wrapMode: TextEdit.Wrap
 	    }
 	}
     }

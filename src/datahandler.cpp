@@ -33,15 +33,14 @@ const QString DataHandler::ARCHIVE_DIRECTORY { "archive" };
 DataHandler::DataHandler()
   : QObject(), mWorkDirectory(), mArchiveDirectory(),
     mCurrentFile(),
-    mCurrentFileList(nullptr), mActiveFileList(), mArchiveFileList()
+    mCurrentFileList(), mActiveFileList(), mArchiveFileList()
 {
   mWorkDirectory = setDirectory(QDir::home(), DEFAULT_DIRECTORY);
   mArchiveDirectory = setDirectory(mWorkDirectory, ARCHIVE_DIRECTORY);
   setFileList(mWorkDirectory, &mActiveFileList);
   setFileList(mArchiveDirectory, &mArchiveFileList);
-  mActiveFileList.sort();
-  mArchiveFileList.sort();
-  mCurrentFileList = &mActiveFileList;
+  mCurrentFileList.setSourceModel(&mActiveFileList);
+  mCurrentFileList.sort(0, Qt::DescendingOrder);
 }
 
 QDir DataHandler::setDirectory(QDir path, const QString& name)
@@ -49,7 +48,7 @@ QDir DataHandler::setDirectory(QDir path, const QString& name)
   if (path.absolutePath() != "" && !path.cd(name)) {
     qDebug("Create work directory.: DataHandler::setDirectory()");
 
-    if (!path.mkdir(name)) {
+    if (!path.mkdir(name) || !path.cd(name)) {
       qFatal("Tried to create directory, but failed.: DataHandler::setDirectory()");
 
       return QDir();
@@ -62,9 +61,9 @@ QDir DataHandler::setDirectory(QDir path, const QString& name)
 void DataHandler::setFileList(const QDir& dir, FileInfoModel* list)
 {
   for (auto fileInfo : dir.entryInfoList(QDir::Files, QDir::Time)) {
-    auto url { QUrl::fromLocalFile(fileInfo.filePath()) };
-    auto modified { getLastModifiedDate(url) };
-    auto preview { getPreviewOfContents(url) };
+    QUrl url { QUrl::fromLocalFile(fileInfo.filePath()) };
+    QString modified { getLastModifiedDate(url) };
+    QString preview { getPreviewOfContents(url) };
     list->appendItem(url, modified, preview);
   }
 }
@@ -76,7 +75,7 @@ bool DataHandler::isAvailable() const
 
 bool DataHandler::isActiveMode() const
 {
-  return mCurrentFileList == &mActiveFileList;
+  return mCurrentFileList.sourceModel() == &mActiveFileList;
 }
 
 void DataHandler::setActiveMode(bool b)
@@ -104,17 +103,28 @@ void DataHandler::releaseCurrentFile()
   setCurrentFile(QUrl());
 }
 
-QAbstractListModel* DataHandler::currentFileList() const
+QAbstractItemModel* DataHandler::currentFileList()
 {
-  return mCurrentFileList;
+  return &mCurrentFileList;
 }
 
-void DataHandler::setCurrentFileList(QAbstractListModel* model)
+void DataHandler::setCurrentFileList(QAbstractItemModel* model)
 {
-  mCurrentFileList = dynamic_cast<FileInfoModel*>(model);
-  mCurrentFileList->sort();
+  mCurrentFileList.setSourceModel(model);
   emit fileListSwitched();
-  setIsEditable(mCurrentFileList == &mActiveFileList);
+  setIsEditable(mCurrentFileList.sourceModel() == &mActiveFileList);
+}
+
+int DataHandler::mapFromSource(int sourceIndex) const
+{
+  auto model { mCurrentFileList.sourceModel()->index(sourceIndex, 0) };
+  return mCurrentFileList.mapFromSource(model).row();
+}
+
+int DataHandler::mapToSource(int proxyIndex) const
+{
+  auto model { mCurrentFileList.index(proxyIndex, 0) };
+  return mCurrentFileList.mapToSource(model).row();
 }
 
 bool DataHandler::isEditable() const
@@ -128,19 +138,22 @@ void DataHandler::setIsEditable(bool b)
   emit isEditableChanged();
 }
 
-bool DataHandler::createNewFile()
+int DataHandler::createNewFile(const QString& text)
 {
-  auto newFile { createFile() };
+  QUrl newFile { createFile() };
 
   if (newFile.toLocalFile().isEmpty()) {
     qCritical("Failed to create new file: DataHandler::createNewFile()");
-    return false;
+    return -1;
   } else {
-    mCurrentFileList->prependItem(newFile, getLastModifiedDate(newFile), getPreviewOfContents(newFile));
-    releaseCurrentFile();
+    if (!text.isEmpty()) {
+      saveFile(newFile, text);
+    }
+    
+    auto currentList { static_cast<FileInfoModel*>(mCurrentFileList.sourceModel()) };
+    currentList->appendItem(newFile, getLastModifiedDate(newFile), getPreviewOfContents(newFile));
     qDebug("Created a new file successfully: DataHandler::createNewFile()");
-
-    return true;
+    return mapFromSource(currentList->rowCount() - 1);
   }
 }
 
@@ -168,17 +181,15 @@ QString DataHandler::getPreviewOfContents(const QUrl& path) const
 
 QUrl DataHandler::createFile() const
 {
-  auto name { QString::number(QDateTime::currentMSecsSinceEpoch()) + ".txt" };
+  QString name { QString::number(QDateTime::currentMSecsSinceEpoch()) + ".txt" };
 
   if (mWorkDirectory.absolutePath().isEmpty()) {
-    qCritical("Cannot find \".memo\": DataHandler::createFile()");
-
+    qFatal("Cannot find \".memo\": DataHandler::createFile()");
     return QUrl();
   } else {
     QFileInfo fileInfo { mWorkDirectory, name };
     auto path { QUrl::fromLocalFile(fileInfo.filePath()) };
     QFile file { path.toLocalFile() };
-
     return file.open(QIODevice::WriteOnly) ? path : QUrl();
   }
 }
@@ -197,17 +208,13 @@ bool DataHandler::loadFile(QFile* file, QStringList* contents, int maxLength, QS
 {
   if (!file->open(QIODevice::ReadOnly | QIODevice::Text)) {
     qCritical("file wasn't loaded: DataHandler::loadFile()");
-
     return false;
   }
 
-  int length { 0 };
-
   while (!file->atEnd()) {
     auto line { func(file->readLine(maxLength)) };
-    length += line.length();
 
-    if (length > maxLength) break;
+    if (contents->length() + line.length() > maxLength) break;
 
     contents->append(line);
   }
@@ -225,34 +232,37 @@ QString DataHandler::withTrim(const QByteArray& byteArray)
   return QString::fromUtf8(byteArray).trimmed();
 }
 
+bool DataHandler::matchCurrentFile(int index)
+{
+  int sourceIndex { mapToSource(index) };
+  return mCurrentFileList.sourceModel()->data(mCurrentFileList.sourceModel()->index(sourceIndex, 0), FileInfoModel::FileURLRole).toUrl() == mCurrentFile;
+}
+
 void DataHandler::selectFile(int index)
 {
-  if (index < 0) {
+  int sourceIndex { mapToSource(index) };
+  if (sourceIndex < 0) {
     releaseCurrentFile();
   } else {
-    setCurrentFile(mCurrentFileList->get(index, "fileURL").toUrl());
+    setCurrentFile(mCurrentFileList.sourceModel()->data(mCurrentFileList.sourceModel()->index(sourceIndex, 0), FileInfoModel::FileURLRole).toUrl());
   }
 }
 
-bool DataHandler::saveCurrentFile(const QString& text) const
+int DataHandler::saveCurrentFile(const QString& text, int index) const
 {
+  int sourceIndex { mapToSource(index) };
+
   if (!hasCurrentFile()) {
     qDebug("no file to save: DataHandler::saveCurrentFile()");
-    return false;
+    return -1;
   } else if (saveFile(currentFile(), text)) {
     updateFileInfo(currentFile());
     qDebug("Saved successfully: DataHandler::saveCurrentFile()");
-    return true;
+    return mapFromSource(sourceIndex);
   } else {
     qCritical("Failed to save: DataHandler::saveCurrentFile()");
-    return false;
+    return -1;
   }
-}
-
-void DataHandler::saveFileBeforeClosing(const QString& text)
-{
-  saveCurrentFile(text);
-  releaseCurrentFile();
 }
 
 bool DataHandler::saveFile(const QUrl& path, const QString& lines) const
@@ -268,19 +278,19 @@ bool DataHandler::saveFile(const QUrl& path, const QString& lines) const
   return true;
 }
 
-int DataHandler::deleteEmptyFile()
+int DataHandler::deleteEmptyFile(int index)
 {
   if (hasCurrentFile()) {
-    QUrl dispose { currentFile() };
+    int currentIndex { mapToSource(index) };
+    QUrl path { currentFile() };
 
     if (deleteFile(currentFile())) {
-      qDebug("Delete empty file: DataHandler::deleteEmptyFile()");
       releaseCurrentFile();
-      int index { mCurrentFileList->removeItem(dispose) };
+      QModelIndex previous { static_cast<FileInfoModel*>(mCurrentFileList.sourceModel())->removeItem(path) };
 
-      if (index >= 0) {
-	qDebug("remove empty file: DataHandler::deleteEmptyFile()");
-	return index;
+      if (previous.isValid()) {
+	qDebug("Deleted empty file successfully: DataHandler::deleteEmptyFile()");
+	return mapFromSource(currentIndex > previous.row() ? currentIndex - 1 : currentIndex);
       }
     }
   }
@@ -298,22 +308,22 @@ bool DataHandler::deleteFile(const QUrl& path) const
 
 void DataHandler::updateFileInfo(const QUrl& url) const
 {
-  mCurrentFileList->modifyItem(url, getLastModifiedDate(url), getPreviewOfContents(url));
-
-  // move to first
+  static_cast<FileInfoModel*>(mCurrentFileList.sourceModel())->modifyItem(url, getLastModifiedDate(url), getPreviewOfContents(url));
 }
 
 void DataHandler::moveCurrentFile(int index)
 {
-  QUrl url { mCurrentFileList->get(index, "fileURL").toUrl() };
-  FileInfoModel* otherFileList { mCurrentFileList == &mActiveFileList ? &mArchiveFileList : &mActiveFileList };
+  auto currentList { static_cast<FileInfoModel*>(mCurrentFileList.sourceModel()) };
+  QModelIndex proxyIndex { currentList->index(mapToSource(index), 0) };
+  QUrl url { currentList->get(proxyIndex, "fileURL").toUrl() };
+  FileInfoModel* otherFileList { currentList == &mActiveFileList ? &mArchiveFileList : &mActiveFileList };
 		
   if (url == currentFile()) {
     QUrl newUrl { moveCurrentFile(url) };
-    otherFileList->prependItem(newUrl, getLastModifiedDate(newUrl), getPreviewOfContents(newUrl));
+    otherFileList->appendItem(newUrl, getLastModifiedDate(newUrl), getPreviewOfContents(newUrl));
     releaseCurrentFile();
-    mCurrentFileList->removeItem(url); // invoke onCurrentIndexChanged()
-    qDebug("move successfully: DataHandler::moveCurrentFile()");
+    currentList->removeItem(url); // invoke onCurrentIndexChanged()
+    qDebug("Moved successfully: DataHandler::moveCurrentFile()");
   } else {
     qCritical("Failed to move: DataHandler::moveCurrentFile()");
   }

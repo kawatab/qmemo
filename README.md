@@ -16,6 +16,7 @@ Simple note-taking application
 
 ## Requirement
 * Qt5
+* QML
 * qmake
 
 ---
@@ -33,4 +34,5 @@ Simple note-taking application
 
 ## 要件
 * Qt5
+* QML
 * qmake

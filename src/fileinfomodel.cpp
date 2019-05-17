@@ -78,51 +78,47 @@ int FileInfoModel::rowCount(const QModelIndex &parent) const
 
 QVariant FileInfoModel::data(const QModelIndex &index, int role) const
 {
-  if (index.row() < 0 || index.row() >= mList.count()) {
+  int dataIndex { index.row() };
+
+  if (dataIndex < 0 || dataIndex >= mList.count()) {
     return QVariant();
   }
 
   return
-    role == FileURLRole ? QVariant(mList.at(index.row()).fileURL) :
-    role == ModifiedRole ? QVariant(mList.at(index.row()).modified) :
-    role == PreviewRole ? QVariant(mList.at(index.row()).preview) :
+    role == FileURLRole ? QVariant(mList.at(dataIndex).fileURL) :
+    role == ModifiedRole ? QVariant(mList.at(dataIndex).modified) :
+    role == PreviewRole ? QVariant(mList.at(dataIndex).preview) :
     role == Qt::EditRole ? QVariant(16) :
     QVariant();
 }
 
-int FileInfoModel::removeItem(const QUrl& path)
+QModelIndex FileInfoModel::removeItem(const QUrl& path)
 {
   QString pathString { path.toString() };
 
   for (int i { 0 }; i < mList.count(); ++i) {
     if (mList[i].fileURL == pathString) {
+      auto index { this->index(i) };
       beginRemoveRows(QModelIndex(), i, i);
       mList.removeAt(i);
       endRemoveRows();
-      return i;
+      return index;
     }
   }
 
-  return -1;
+  return QModelIndex();
 }
 
-QVariant FileInfoModel::get(int index, const QString& role) const
+QVariant FileInfoModel::get(const QModelIndex& index, const QString& role) const
 {
-  if (index < 0 || index >= mList.count()) {
-    return QVariant();
-  }
+  int dataIndex { index.row() };
 
   return
-    role == "fileURL" ? QVariant(mList.at(index).fileURL) :
-    role == "modified" ? QVariant(mList.at(index).modified) :
-    role == "preview" ? QVariant(mList.at(index).preview) :
+    (dataIndex < 0 || dataIndex >= mList.count()) ? QVariant() :
+    role == "fileURL" ? QVariant(mList.at(dataIndex).fileURL) :
+    role == "modified" ? QVariant(mList.at(dataIndex).modified) :
+    role == "preview" ? QVariant(mList.at(dataIndex).preview) :
     QVariant();
-}
-
-void FileInfoModel::sort()
-{
-  std::sort(mList.begin(), mList.end(), 
-	    [](const PreviewItem& a, const PreviewItem& b) { return a.modified > b.modified; } );
 }
 
 Qt::ItemFlags FileInfoModel::flags(const QModelIndex &index) const

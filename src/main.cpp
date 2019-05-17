@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
   DataHandler dataHandler;
 
   if (!dataHandler.isAvailable()) {
-    qCritical("Failed to create directories for application data!!");
+    qFatal("Failed to create directories for application data!!");
     return 1;
   }
 

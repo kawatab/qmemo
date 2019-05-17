@@ -12,11 +12,13 @@ CONFIG += debug_and_release
            
 # Input
 HEADERS += src/datahandler.hpp \
-           src/fileinfomodel.hpp
+           src/fileinfomodel.hpp \
+           src/fileinfoproxy.hpp
 
 SOURCES += src/main.cpp \
            src/datahandler.cpp \
-           src/fileinfomodel.cpp
+           src/fileinfomodel.cpp \
+           src/fileinfoproxy.cpp
 
 RESOURCES += qml.qrc \
              i18n.qrc

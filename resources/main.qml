@@ -17,9 +17,9 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import QtQuick 2.7
-import QtQuick.Controls 2.0
-import QtQuick.Layouts 1.0
+import QtQuick 2.11
+import QtQuick.Controls 2.4
+import QtQuick.Layouts 1.11
 
 ApplicationWindow {
     id: window
@@ -33,7 +33,6 @@ ApplicationWindow {
     property alias fileListView: listPane.fileListView
     property alias textEdit: editPane.textEdit
     property bool textChanged: false
-    property bool orderChanged: false
     property bool readyToSave: false
 	
     RowLayout {
@@ -51,18 +50,27 @@ ApplicationWindow {
 	    fileListView.model: dataHandler.currentFileList
 
 	    fileListView.onCurrentItemChanged: {
-		var currentIndex = fileListView.currentIndex
+		if (fileListView.count == 0) {
+		    clearTextEdit()
+		    return
+		}
+		
+		var index = fileListView.currentIndex
 
+		if (dataHandler.matchCurrentFile(index)) return
+		
 		if (dataHandler.isEditable && dataHandler.hasCurrentFile()) {
 		    if (textEdit.text.trim() == "") {
-			var previousIndex = dataHandler.deleteEmptyFile()
-			if (currentIndex > previousIndex) --currentIndex;
+			index = dataHandler.deleteEmptyFile(index)
 		    } else if (textChanged) {
-			dataHandler.saveFileBeforeClosing(textEdit.text)
+			index = dataHandler.saveCurrentFile(textEdit.text, index)
+			clearTextEdit()
 		    }
 		}
+		console.debug("currentItemChanged")
 
-		dataHandler.selectFile(currentIndex)
+		dataHandler.selectFile(index)
+		fileListView.currentIndex = index // invoke recursively
 		textEdit.text = dataHandler.loadCurrentFile()
 		textEdit.cursorPosition = 0
 		textEdit.cursorVisible = true
@@ -75,44 +83,58 @@ ApplicationWindow {
 		if (fileListSelectBox.currentIndex == 0) {
 		    dataHandler.isActiveMode = true
 		} else {
-		    if (textEdit.text.trim() == "") {
-			dataHandler.deleteEmptyFile()
-		    } else if (textChanged) {
-			dataHandler.saveFileBeforeClosing(textEdit.text)
+		    if (dataHandler.hasCurrentFile()) {
+			if (textEdit.text.trim() == "") {
+			    dataHandler.deleteEmptyFile()
+			} else if (textChanged) {
+			    dataHandler.saveCurrentFile(textEdit.text)
+			}
 		    }
 
 		    dataHandler.isActiveMode = false
 		}
 
-		if (fileListView.currentIndex < 0) {
-		    dataHandler.releaseCurrentFile() // release before text clear
-		    textEdit.text = ""
-		    textChanged = false
-		    readyToSave = false
+		if (fileListView.count > 0) {
+		    fileListView.currentIndex = 0
 		}
-
-		textEdit.cursorPosition = 0
-		textEdit.cursorVisible = true
-		textEdit.focus = true
 	    }
 
 	    newButton.onClicked: {
-		if (textEdit.text == "") return;
+		if (textEdit.text == "" && dataHandler.hasCurrentFile()) return;
+		var index = dataHandler.createNewFile("")
 
-		if (dataHandler.createNewFile()) {
-		    textChanged = false;
-		    readyToSave = false;
-		    fileListView.currentIndex = 0
+		if (index < 0) {
+		    console.error("Failed to create a new file.")
 		} else {
-		    console.log("Failed to create a new file.")
+		    fileListView.currentIndex = index
 		}
 	    }
 
 	    moveButton.onClicked: {
-		if (dataHandler.isEditable && textEdit.text == "") return;
+		var index = fileListView.currentIndex
+		
+		if (dataHandler.isEditable) {
+		    if(textEdit.text == "") return;
 
-		if (textChanged) dataHandler.saveFileBeforeClosing(textEdit.text)
-		dataHandler.moveCurrentFile(fileListView.currentIndex)
+		    if (textChanged) {
+			index = dataHandler.saveCurrentFile(textEdit.text, index)
+		    }
+		}
+
+		textChanged = false // avoid to save wrongly
+		dataHandler.moveCurrentFile(index)
+
+		if (fileListView.count == 0) {
+		    clearTextEdit()
+		}
+	    }
+
+	    function clearTextEdit() {
+		dataHandler.releaseCurrentFile()
+		textEdit.text = ""
+		textEdit.focus = true
+		textChanged = false
+		readyToSave = false
 	    }
 	}
 
@@ -132,6 +154,7 @@ ApplicationWindow {
 
 	    textEdit.onTextChanged: {
 		textChanged = true
+		readyToSave = false
 	    }
 	}
     }
@@ -145,17 +168,27 @@ ApplicationWindow {
 	    if (dataHandler.isEditable) {
 		if (textChanged) {
 		    if (readyToSave) {
-			var selectedIndex = fileListView.currentIndex
+			if (dataHandler.hasCurrentFile()) {
+			    var index = dataHandler.saveCurrentFile(textEdit.text, fileListView.currentIndex)
 
-			if (dataHandler.saveCurrentFile(textEdit.text)) {
-			    textChanged = false
-			    readyToSave = false
-			    console.log("Saved automatically.")
+			    if (index < 0) {
+				console.error("Failed to save file: MainWindow::autoSave()");
+				return // do nothing if failed
+			    } else {
+				textChanged = false
+				readyToSave = false
+				console.debug("Saved automatically.: main.qml::autoSaveTimer")
+				fileListView.currentIndex = index
+			    }
 			} else {
-			    return // do nothing if failed
+			    var index = dataHandler.createNewFile(textEdit.text)
+			    if (index < 0) {
+				console.error("Failed to create a new file.: main.qml::autoSaveTimer")
+			    } else {
+				fileListView.currentIndex = index
+				console.debug("create new file.: main.qml::autoSaveTimer")
+			    }
 			}
-		    } else if (dataHandler.orderChanged) {
-			dataHandler.orderChanged = false
 		    }
 		}
 
@@ -164,13 +197,21 @@ ApplicationWindow {
 	}
     }
 
-    Component.onCompleted: autoSaveTimer.start()
+    Component.onCompleted: {
+	listPane.fileListSelectBox.currentIndex = 1
+	listPane.fileListSelectBox.currentIndex = 0
+
+	autoSaveTimer.start()
+    }
 
     onClosing: {
-	if (textEdit.text.trim() == "") {
-	    dataHandler.deleteEmptyFile()
-	} else if (textChanged) {
-	    dataHandler.saveFileBeforeClosing(textEdit.text)
+	if (dataHandler.isEditable && dataHandler.hasCurrentFile()) {
+	    if (textEdit.text.trim() == "") {
+		dataHandler.deleteEmptyFile()
+	    } else if (textChanged) {
+		dataHandler.saveCurrentFile(textEdit.text)
+		dataHandler.releaseCurrentFile()
+	    }
 	}
     }
 }

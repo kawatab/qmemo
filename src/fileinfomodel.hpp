@@ -33,7 +33,8 @@ struct PreviewItem
 };
 
 
-class FileInfoModel : public QAbstractListModel {
+class FileInfoModel : public QAbstractListModel
+{
   Q_OBJECT
   Q_ENUMS(PreviewRoles)
   Q_PROPERTY(int count READ rowCount NOTIFY countChanged)
@@ -46,20 +47,19 @@ public:
     PreviewRole,
   };
 
-  explicit FileInfoModel(QObject *parent = 0);
+  explicit FileInfoModel(QObject* parent = 0);
 
-  QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
-  Qt::ItemFlags flags(const QModelIndex &index) const override;
+  QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
+  Qt::ItemFlags flags(const QModelIndex& index) const override;
   int rowCount(const QModelIndex& parent = QModelIndex()) const override;
 
 
   void appendItem(const QUrl& fileURL, const QString& modified, const QString& preview);
   bool dynamicRoles() const;
-  QVariant get(int index, const QString& role) const;
-  void modifyItem(const QUrl& fileURL, const QString& modified, const QString& preivew);
+  QVariant get(const QModelIndex& index, const QString& role) const;
+  void modifyItem(const QUrl& fileURL, const QString& modified, const QString& preview);
   void prependItem(const QUrl& fileURL, const QString& modified, const QString& preview);
-  int removeItem(const QUrl& path);
-  void sort();
+  QModelIndex removeItem(const QUrl& path);
 
 signals:
   void countChanged();

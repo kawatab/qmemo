@@ -17,7 +17,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import QtQuick 2.7
+import QtQuick 2.11
 
 EditPaneForm {
     Keys.onPressed: {
@@ -29,19 +29,31 @@ EditPaneForm {
 	}
     }
 
-    selectAllButton.onClicked: textEdit.selectAll()
-    cutButton.onClicked: textEdit.cut()
-    copyButton.onClicked: textEdit.copy()
-    pasteButton.onClicked: textEdit.paste()
+    selectAllButton.onClicked: {
+	selectAllButton.focus = false
+	textEdit.selectAll()
+    }
+    
+    cutButton.onClicked: {
+	cutButton.focus = false
+	textEdit.cut()
+    }
+    
+    copyButton.onClicked: {
+	copyButton.focus = false
+	textEdit.copy()
+    }
+    
+    pasteButton.onClicked: {
+	pasteButton.focus = false
+	textEdit.paste()
+    }
+    
 
 
     textEdit.onCursorRectangleChanged: ensureVisible(textEdit.cursorRectangle)
 
     function ensureVisible(r) {
-	if (flick.contentX >= r.x)
-	    flick.contentX = r.x;
-	else if (flick.contentX+width <= r.x+r.width)
-	    flick.contentX = r.x+r.width-width;
 	if (flick.contentY >= r.y)
 	    flick.contentY = r.y;
 	else if (flick.contentY+height <= r.y+r.height)
